@@ -34,7 +34,9 @@ export const useAuth = () => {
 };
 
 // Set up axios defaults
-axios.defaults.baseURL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+// In production, API requests are made to the same domain
+// In development, API requests are made to http://localhost:5000
+axios.defaults.baseURL = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000';
 
 function App() {
   const [user, setUser] = useState(null);

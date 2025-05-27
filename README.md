@@ -1,6 +1,68 @@
-# 🌞 Sun Festival Carpool 2025
+# 🌞 Sun Festival Carpool
 
-A community-driven carpooling web application for the Sun Festival (Solar United Natives) in Csobánkapuszta, Hungary, from June 29 to July 6, 2025.
+A community-driven carpooling web app for the Sun Festival 2025 in Csobánkapuszta, Hungary.
+
+## Features
+
+- User authentication and registration
+- Create and manage rides to/from the festival
+- Request to join rides as a passenger
+- Real-time chat with drivers and passengers
+- Interactive map integration
+- Admin dashboard for festival management
+
+## Getting Started
+
+### Development
+
+1. Clone this repository
+2. Install dependencies:
+   ```
+   npm run install-all
+   ```
+3. Create a `.env` file in the root directory with the following variables:
+   ```
+   JWT_SECRET=your_jwt_secret_key
+   ```
+4. Start the development server:
+   ```
+   npm start
+   ```
+
+This will start both the Express backend server on port 5000 and the React development server on port 3000.
+
+### Production Deployment on Render.com
+
+The easiest way to deploy this application is using Render.com:
+
+1. Fork/push this repository to your GitHub account
+2. Sign up/login to [Render.com](https://render.com)
+3. Click "New +" → "Web Service"
+4. Connect your GitHub repository
+5. Use these settings:
+   - **Name**: sun-festival-carpool (or your preferred name)
+   - **Environment**: Node
+   - **Build Command**: `npm run install-all && npm run build`
+   - **Start Command**: `npm run prod`
+   - **Plan**: Free (or paid for better performance)
+6. Under Advanced, add the following environment variables:
+   - `NODE_ENV`: production
+   - `JWT_SECRET`: (Generate a secure random string)
+7. Click "Create Web Service"
+
+After deployment, you'll be able to access your application at the URL provided by Render.
+
+## Tech Stack
+
+- **Frontend**: React, Tailwind CSS
+- **Backend**: Node.js, Express
+- **Database**: SQLite
+- **Real-time**: Socket.IO
+- **Authentication**: JWT
+
+## License
+
+MIT
 
 ## 🚗 Features
 
@@ -139,83 +201,4 @@ NODE_ENV=production npm run server
 The app uses SQLite with the following main tables:
 - `users` - User accounts and authentication
 - `rides` - Ride offers and details
-- `ride_requests` - Passenger requests to join rides
-- `chat_messages` - Text and location messages
-- `admin_settings` - Google Maps API and festival config
-- `festival_locations` - Predefined pickup points
-
-## 🔒 Security Features
-
-- JWT-based authentication
-- Password hashing with bcryptjs
-- Admin-only access to sensitive settings
-- Input validation and sanitization
-- CORS protection
-
-## 🤝 Community Guidelines
-
-- Be respectful and communicate clearly
-- Share contact details for coordination
-- Confirm ride details before departure
-- Split fuel costs fairly among passengers
-- Leave on time and keep commitments
-- Report issues to festival organizers
-
-## ⚖️ Legal Disclaimer
-
-This is a community-driven service. Users arrange rides at their own risk. Please use common sense and stay safe while traveling.
-
-## 🛣️ Development Roadmap
-
-### Phase 1 (Current) ✅
-- Basic authentication and user management
-- Admin panel for Google Maps API configuration
-- Database setup and core infrastructure
-- Responsive UI with festival theme
-
-### Phase 2 (Next)
-- Complete ride offering and requesting system
-- Real-time chat with location sharing
-- Google Maps integration for locations
-- Enhanced admin location management
-
-### Phase 3 (Future)
-- Push notifications for ride updates
-- Advanced filtering and search
-- User profiles and preferences
-- Mobile app (React Native)
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **Database not created**
-   - Ensure write permissions in server/database/ directory
-   - Check Node.js version (16+ required)
-
-2. **Google Maps not working**
-   - Verify API key in admin settings
-   - Check API quotas and billing in Google Cloud
-   - Ensure required APIs are enabled
-
-3. **Real-time features not working**
-   - Check WebSocket connection
-   - Verify port 5000 is accessible
-   - Check firewall settings
-
-## 📞 Support
-
-For technical issues or questions:
-- Check the troubleshooting section above
-- Review the admin dashboard for system status
-- Contact festival organizers for community support
-
-## 📄 License
-
-MIT License - Feel free to use and modify for your own festival!
-
----
-
-**Built with ❤️ for the Sun Festival community**
-
-*Connecting festival-goers through sustainable carpooling* 🌞🚗 
+- `ride_requests`
