@@ -1,86 +1,71 @@
 @echo off
-title S.U.N. Festival Website - Easy Setup
+title Sun Festival Carpool - Easy Setup
 color 0A
 echo.
 echo ========================================
-echo    S.U.N. FESTIVAL WEBSITE SETUP
+echo   SUN FESTIVAL CARPOOL - EASY SETUP
 echo ========================================
 echo.
-echo This will automatically set up and run your website.
-echo Please wait while we prepare everything...
+echo This will install and run your carpool website with one click!
+echo Please wait while we set everything up...
 echo.
 
-REM Check if Node.js is installed
-node --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo ERROR: Node.js is not installed on your computer.
-    echo.
-    echo Please download and install Node.js from: https://nodejs.org
-    echo Choose the "LTS" version (recommended for most users)
-    echo.
-    echo After installing Node.js, run this file again.
-    echo.
-    pause
-    exit /b 1
-)
+REM Kill any existing Node.js processes to avoid conflicts
+echo Stopping any running services...
+taskkill /f /im node.exe >nul 2>&1
+timeout /t 2 /nobreak >nul
 
-echo ✓ Node.js is installed
-echo.
-
-REM Install dependencies for main project
+REM Install main project dependencies
 echo Installing main project dependencies...
-call npm install
+call npm install --silent
 if %errorlevel% neq 0 (
-    echo ERROR: Failed to install main dependencies
+    echo ERROR: Failed to install main dependencies. Make sure Node.js is installed.
+    echo Download Node.js from: https://nodejs.org
     pause
     exit /b 1
 )
 echo ✓ Main dependencies installed
-echo.
 
-REM Install dependencies for client
+REM Install client dependencies
 echo Installing website dependencies...
 cd client
-call npm install
+call npm install --silent
 if %errorlevel% neq 0 (
     echo ERROR: Failed to install website dependencies
     pause
     exit /b 1
 )
 echo ✓ Website dependencies installed
-echo.
-
-REM Install dependencies for server
-echo Installing server dependencies...
-cd ..\server
-call npm install
-if %errorlevel% neq 0 (
-    echo ERROR: Failed to install server dependencies
-    pause
-    exit /b 1
-)
-echo ✓ Server dependencies installed
-echo.
 
 cd ..
 
+echo.
 echo ========================================
-echo     SETUP COMPLETE! STARTING WEBSITE...
+echo        STARTING SUN FESTIVAL CARPOOL
 echo ========================================
 echo.
-echo The website will open in your browser automatically.
+echo ✓ Setup complete! Starting your website...
 echo.
-echo IMPORTANT NOTES:
-echo - Keep this window open while using the website
-echo - The website will be available at: http://localhost:3000
-echo - To stop the website, close this window or press Ctrl+C
+echo WEBSITE INFORMATION:
+echo - Main Website: http://localhost:3000
+echo - Admin Panel: http://localhost:3000/admin/login
+echo - Admin Login: admin@sunfestival.com
+echo - Admin Password: admin123
 echo.
-echo Starting in 3 seconds...
+echo IMPORTANT: Keep this window open while using the website!
+echo To stop the website, close this window or press Ctrl+C
+echo.
+
+REM Start server in background
+echo Starting server...
+start /min "Sun Festival Server" cmd /c "node server/index.js"
 timeout /t 3 /nobreak >nul
 
-REM Start the development server
-cd client
-echo Starting S.U.N. Festival website...
-echo.
+REM Open website in browser
+echo Opening website in your browser...
 start "" http://localhost:3000
-call npm start 
+
+REM Start client (this keeps the window open)
+echo Starting website interface...
+cd client
+npm start 

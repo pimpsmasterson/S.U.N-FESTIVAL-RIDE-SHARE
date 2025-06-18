@@ -12,35 +12,123 @@ const ridesRoutes = require('./routes/rides');
 const chatRoutes = require('./routes/chat');
 const adminRoutes = require('./routes/admin');
 
+// Settings service to load configuration from database
+class SettingsService {
+  constructor() {
+    this.settings = {};
+    this.initialized = false;
+  }
+
+  async initialize() {
+    if (this.initialized) return;
+    
+    try {
+      // Load all settings from database
+      const allSettings = await dbService.allQuery('SELECT setting_key, setting_value FROM admin_settings');
+      this.settings = {};
+      allSettings.forEach(setting => {
+        this.settings[setting.setting_key] = setting.setting_value;
+      });
+      this.initialized = true;
+      console.log('✅ Settings loaded from database');
+    } catch (error) {
+      console.error('❌ Failed to load settings from database:', error);
+      // Use fallback values
+      this.settings = {
+        jwt_secret: process.env.JWT_SECRET || 'festival-secret-key',
+        cors_origins: '*',
+        app_name: 'Sun Festival Carpool',
+        enable_chat: 'true',
+        maintenance_mode: 'false'
+      };
+    }
+  }
+
+  get(key, fallback = null) {
+    return this.settings[key] || process.env[key.toUpperCase()] || fallback;
+  }
+
+  getBoolean(key, fallback = false) {
+    const value = this.get(key, fallback.toString());
+    return value === 'true' || value === true;
+  }
+
+  async refresh() {
+    this.initialized = false;
+    await this.initialize();
+  }
+}
+
+const settingsService = new SettingsService();
+
 const app = express();
 
 // Only create HTTP server if not in Vercel environment
 const isVercel = process.env.VERCEL === '1';
 const server = isVercel ? null : http.createServer(app);
-const io = isVercel ? null : socketIo(server, {
-  cors: {
-    origin: process.env.NODE_ENV === 'production' ? '*' : ['http://localhost:3000', 'http://localhost:3004'],
-    methods: ['GET', 'POST']
-  }
-});
 
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// Configure CORS immediately (before routes) - Fix for development
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' ? '*' : ['http://localhost:3000', 'http://localhost:3004'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
+
+// Middleware
 app.use(express.json());
 
-// Make io available to routes if not in Vercel
-if (!isVercel) {
-  app.set('io', io);
+// Make settings service available to routes
+app.use((req, res, next) => {
+  req.settings = settingsService;
+  next();
+});
+
+// Initialize database and settings
+async function initializeApp() {
+  try {
+    await dbService.initializeDatabase();
+    await settingsService.initialize();
+
+    // Initialize Socket.IO with proper CORS
+    if (!isVercel && server) {
+      const io = socketIo(server, {
+        cors: {
+          origin: process.env.NODE_ENV === 'production' ? '*' : ['http://localhost:3000', 'http://localhost:3004'],
+          methods: ['GET', 'POST'],
+          credentials: true
+        }
+      });
+      app.set('io', io);
+      setupSocketIO(io);
+    }
+
+    console.log('🚀 Application initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize application:', error);
+    process.exit(1);
+  }
 }
 
-// Initialize database
-dbService.initializeDatabase();
+// Maintenance mode middleware
+app.use(async (req, res, next) => {
+  // Skip maintenance check for admin routes and health check
+  if (req.path.startsWith('/api/admin') || req.path === '/api/health') {
+    return next();
+  }
+
+  const maintenanceMode = settingsService.getBoolean('maintenance_mode', false);
+  if (maintenanceMode) {
+    return res.status(503).json({
+      error: 'Service temporarily unavailable',
+      message: 'The application is currently under maintenance. Please try again later.',
+      maintenance: true
+    });
+  }
+  next();
+});
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -48,8 +136,32 @@ app.use('/api/rides', ridesRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Socket.IO setup if not in Vercel
-if (!isVercel && io) {
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    environment: process.env.NODE_ENV || 'development',
+    app_name: settingsService.get('app_name', 'Sun Festival Carpool'),
+    version: settingsService.get('app_version', '1.0.0'),
+    maintenance_mode: settingsService.getBoolean('maintenance_mode', false)
+  });
+});
+
+// Settings endpoint for frontend
+app.get('/api/settings/public', (req, res) => {
+  res.json({
+    app_name: settingsService.get('app_name', 'Sun Festival Carpool'),
+    festival_name: settingsService.get('festival_name', 'Sun Festival 2025'),
+    festival_location: settingsService.get('festival_location', 'Csobánkapuszta, Hungary'),
+    festival_dates: settingsService.get('festival_dates', 'June 29 - July 6, 2025'),
+    enable_registration: settingsService.getBoolean('enable_registration', true),
+    enable_chat: settingsService.getBoolean('enable_chat', true),
+    google_analytics_id: settingsService.get('google_analytics_id', '')
+  });
+});
+
+// Socket.IO setup function
+function setupSocketIO(io) {
   // Socket.IO authentication middleware
   io.use(async (socket, next) => {
     try {
@@ -58,7 +170,8 @@ if (!isVercel && io) {
         return next(new Error('Authentication error: No token provided'));
       }
 
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'festival-secret-key');
+      const jwtSecret = settingsService.get('jwt_secret', 'festival-secret-key');
+      const decoded = jwt.verify(token, jwtSecret);
       
       const user = await dbService.getQuery(
         'SELECT id, name, email FROM users WHERE id = ?',
@@ -80,6 +193,13 @@ if (!isVercel && io) {
   // Socket.IO connection handling
   io.on('connection', (socket) => {
     console.log(`🔌 User connected: ${socket.user.name} (${socket.id})`);
+
+    // Check if chat is enabled
+    if (!settingsService.getBoolean('enable_chat', true)) {
+      socket.emit('error', { message: 'Chat functionality is currently disabled' });
+      socket.disconnect();
+      return;
+    }
 
     // Join ride chat room
     socket.on('join-ride-chat', async (rideId) => {
@@ -140,6 +260,11 @@ if (!isVercel && io) {
     // Handle location sharing
     socket.on('share_location', async (data) => {
       try {
+        if (!settingsService.getBoolean('enable_location_sharing', true)) {
+          socket.emit('error', { message: 'Location sharing is currently disabled' });
+          return;
+        }
+
         const { rideId, latitude, longitude, message } = data;
         
         // Verify access
@@ -213,11 +338,11 @@ if (!isVercel && io) {
       }
     });
 
-    // Handle disconnection
-    socket.on('disconnect', (reason) => {
-      console.log(`🔌 User disconnected: ${socket.user.name} (${reason})`);
+    // Handle disconnect
+    socket.on('disconnect', () => {
+      console.log(`🔌 User disconnected: ${socket.user.name} (${socket.id})`);
       
-      // Notify current ride chat if user was in one
+      // Leave any chat rooms
       if (socket.currentRideId) {
         socket.to(`ride-${socket.currentRideId}`).emit('user_left', {
           userId: socket.userId,
@@ -226,48 +351,61 @@ if (!isVercel && io) {
         });
       }
     });
-
-    // Handle errors
-    socket.on('error', (error) => {
-      console.error(`🚫 Socket error for user ${socket.user.name}:`, error);
-    });
   });
 }
 
-// Helper function to check chat access (same as in chat routes)
+// Helper function to check chat access
 async function checkChatAccess(userId, rideId) {
-  // Check if user is the driver
-  const isDriver = await dbService.getQuery(
-    'SELECT id FROM rides WHERE id = ? AND driver_id = ?',
-    [rideId, userId]
-  );
+  try {
+    // Check if user is the driver
+    const isDriver = await dbService.getQuery(
+      'SELECT id FROM rides WHERE id = ? AND driver_id = ?',
+      [rideId, userId]
+    );
 
-  if (isDriver) {
-    return true;
+    if (isDriver) return true;
+
+    // Check if user has an accepted ride request
+    const hasRequest = await dbService.getQuery(
+      'SELECT id FROM ride_requests WHERE ride_id = ? AND passenger_id = ? AND status = "accepted"',
+      [rideId, userId]
+    );
+
+    return !!hasRequest;
+  } catch (error) {
+    console.error('Error checking chat access:', error);
+    return false;
   }
-
-  // Check if user is a confirmed passenger
-  const isPassenger = await dbService.getQuery(
-    'SELECT id FROM ride_requests WHERE ride_id = ? AND passenger_id = ? AND status = ?',
-    [rideId, userId, 'confirmed']
-  );
-
-  return !!isPassenger;
 }
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', environment: process.env.NODE_ENV });
+// Serve static files in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../client/build')));
+  
+  app.get('*', (req, res) => {
+    res.sendFile(path.resolve(__dirname, '../client/build', 'index.html'));
+  });
+}
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ 
+    error: 'Something went wrong!',
+    message: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
 });
 
-// Start server if not in Vercel
-if (!isVercel && server) {
-  server.listen(PORT, () => {
-    console.log(`🌞 Sun Festival Carpooling Server running on port ${PORT}`);
-    console.log('🚗 Ready to connect festival-goers!');
-    console.log('💬 Real-time chat enabled with content moderation');
-  });
-}
+// Initialize and start server
+initializeApp().then(() => {
+  if (!isVercel && server) {
+    server.listen(PORT, () => {
+      console.log(`🌞 Sun Festival Carpool Server running on port ${PORT}`);
+      console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🎯 App Name: ${settingsService.get('app_name', 'Sun Festival Carpool')}`);
+    });
+  }
+});
 
-// Export for Vercel
-module.exports = app; 
+// Export for serverless deployment
+module.exports = app;

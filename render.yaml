@@ -3,12 +3,19 @@ services:
     name: sun-festival-carpool
     env: node
     buildCommand: npm run install-all && npm run build
-    startCommand: npm run prod
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
-      - key: JWT_SECRET
-        generateValue: true
       - key: PORT
-        value: 5000
-    healthCheckPath: /api/health 
+        value: 10000
+    healthCheckPath: /api/health
+    disk:
+      name: festival-data
+      mountPath: /opt/render/project/src/server/database
+      sizeGB: 1
+    scaling:
+      minInstances: 1
+      maxInstances: 3
+    autoDeploy: true
+    branch: main 

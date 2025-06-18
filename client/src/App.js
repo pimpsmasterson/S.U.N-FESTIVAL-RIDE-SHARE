@@ -21,6 +21,7 @@ import AdminLogin from './components/admin/AdminLogin';
 import AdminDashboard from './components/admin/AdminDashboard';
 import AdminSettings from './components/admin/AdminSettings';
 import AdminLocations from './components/admin/AdminLocations';
+import AdminUsers from './components/admin/AdminUsers';
 
 // Context
 const AuthContext = createContext();
@@ -122,6 +123,9 @@ function App() {
             } />
             <Route path="/admin/locations" element={
               user?.isAdmin ? <AdminLocations /> : <Navigate to="/admin/login" />
+            } />
+            <Route path="/admin/users" element={
+              user?.isAdmin ? <AdminUsers /> : <Navigate to="/admin/login" />
             } />
             
             {/* Protected routes */}
